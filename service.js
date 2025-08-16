@@ -1,62 +1,55 @@
 // server.js
-const express = require("express");
-const bodyParser = require("body-parser");
-const axios = require("axios");
-
+const express = require('express');
+const bodyParser = require('body-parser');
 const app = express();
+
 app.use(bodyParser.json());
 
-// 你的 Tawk.to API Key
-const TAWK_API_KEY = "YOUR_TAWKTO_API_KEY";
+// 从环境变量读取端口
+const PORT = process.env.PORT || 3000;
 
-// 关键词规则（支持别名）
-const rules = [
-  {
-    keywords: ["退款", "退钱", "退货", "我要退款"], // 多个别名
-    reply: "您好，退款流程是：请填写退款申请表，我们会在 3 个工作日内处理。"
-  },
-  {
-    keywords: ["价格", "多少钱", "收费", "费用"],
-    reply: "我们的价格方案有基础版、专业版和企业版，详情请看：https://example.com/pricing"
-  },
-  {
-    keywords: ["发票", "开票", "要发票"],
-    reply: "需要发票的客户请联系客服邮箱：billing@example.com"
-  }
-];
+// 配置你的 Tawk.to Property ID
+const TAWK_PROPERTY_ID = process.env.TAWK_PROPERTY_ID || '68953feca4fc79192a7bd617';
 
-// Webhook 接收消息
-app.post("/tawkto-webhook", async (req, res) => {
-  try {
-    const message = req.body.message;   // 访客消息
-    const visitorId = req.body.visitor; // 访客 ID
-    console.log("访客消息：", message);
+// 简单关键词自动回复逻辑
+const keywordReplies = {
+    '你好': '您好！有什么可以帮您的吗？',
+    '价格': '我们的产品价格请访问 https://tw.songvape.com/price',
+    '帮助': '请问您遇到什么问题？'
+};
 
-    // 遍历规则，模糊匹配
-    for (let rule of rules) {
-      if (rule.keywords.some(k => message.includes(k))) {
-        const reply = rule.reply;
+// 接收 Tawk.to Webhook 消息
+app.post('/tawkto-webhook', (req, res) => {
+    const data = req.body;
 
-        // 调用 Tawk.to API 回复
-        await axios.post("https://api.tawk.to/v1/message", {
-          visitor: visitorId,
-          message: reply,
-        }, {
-          headers: {
-            Authorization: `Bearer ${TAWK_API_KEY}`
-          }
-        });
+    // 验证 Property ID（防止伪造）
+    if(data && data.widget_id !== TAWK_PROPERTY_ID){
+        return res.status(403).send('Invalid Property ID');
+    }
 
-        console.log(`已自动回复：${reply}`);
-        break; // 匹配一个规则就停止
-      }
+    const message = data.message || '';
+    const visitor = data.visitor || {};
+
+    console.log('收到消息:', message, '访客信息:', visitor);
+
+    // 自动匹配关键词
+    let reply = null;
+    for(const key in keywordReplies){
+        if(message.includes(key)){
+            reply = keywordReplies[key];
+            break;
+        }
+    }
+
+    if(reply){
+        // TODO: 这里可以调用 Tawk.to 的发送消息 API 或通过 Webhook 回复
+        console.log('自动回复:', reply);
     }
 
     res.sendStatus(200);
-  } catch (err) {
-    console.error("Error:", err.response?.data || err.message);
-    res.sendStatus(500);
-  }
 });
 
-app.listen(3000, () => console.log("🚀 关键词自动回复服务已运行，端口 3000"));
+// 启动服务
+app.listen(PORT, () => {
+    console.log(`Tawkbot running on port ${PORT}`);
+});
